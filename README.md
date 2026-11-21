@@ -1,0 +1,81 @@
+# The 1981 Ada Parser, in Go
+
+This is a Go transliteration of a small Ada parser that I wrote in MLISP on the UC Irvine PDP-10 in January 1981. The original, recovered from backup tape in 2026, is at **[DrStephenCW/ada-parser-1981](https://github.com/DrStephenCW/ada-parser-1981)**, along with the story of how it was written and what came of it.
+
+The port keeps the 1981 design. The grammar is not translated into Go: the program reads the same `GRAMMA.LSP` file of `(DEFPROP rule body GRAMMAR)` forms with a tiny Lisp reader and walks it at run time, and the parser functions follow `PARSER.MLI` one for one. By default it also keeps the 1981 bugs.
+
+— Stephen Clarke-Willson
+
+## Try it
+
+```
+go install github.com/Above-the-Garage/ada-parser-1981-go/cmd/adaparse@latest
+
+adaparse -rule SIMPLE-EXPRESSION A + B '*' C
+```
+
+```
+ SIMPLE-EXPRESSION
+   TERM
+     FACTOR
+       PRIMARY
+         NAME
+           IDENTIFIER
+             A
+   ADDING-OPERATOR
+     +
+   TERM
+     ...
+```
+
+Run `adaparse` with no `-rule` for the command loop from `TOP()`: `S tokens...` sets the input, a rule name parses it, and `E` exits. Tokens use UCI Lisp syntax, so a comma is `/,` and a parenthesis is `/(`, just as in the 1981 session. The grammar's lexical rules are stubs, so the only identifiers are `A`, `B` and `C`, and the only numbers are `1` and `2`.
+
+Flags: `-fix` turns on the corrections described below, `-grammar FILE` loads a different grammar (any of the GRAMMA.* snapshots, for instance), and `-q` hides the "Can't find production" messages.
+
+## Layout
+
+| Path | What it is | 1981 counterpart |
+|---|---|---|
+| [`lisp/`](lisp/lisp.go) | Reader and printer for atoms, lists and the `/` escape | the UCI Lisp reader |
+| [`grammar.go`](grammar.go) | Loads `DEFPROP` forms into a map | `DSKIN GRAMMA` and `GET(name,'GRAMMAR)` |
+| [`parser.go`](parser.go) | `parse` and `parse1` | `EXPR PARSE` and `EXPR PARSE1` |
+| [`tprint.go`](tprint.go) | Tree printer | `EXPR TPRINT` |
+| [`cmd/adaparse`](cmd/adaparse/main.go) | Command line and command loop | `EXPR TOP` and `BUILD.MIC` |
+| [`original/`](original/) | `GRAMMA.LSP`, `PARSER.MLI`, `DSKLOG.LOG`, `BUILD.MIC`, byte-exact from tape | |
+
+The comments in `parser.go` quote the MLISP line each piece of Go comes from.
+
+## How the MLISP maps to Go
+
+- **`INPUT-STREAM` is a slice index.** In 1981 the remaining input was a pointer into an immutable Lisp list, and each function saved it on entry and put it back on failure. Here the tokens are a `[]lisp.Atom` and the position is an `int`. Backtracking is still one assignment.
+- **NIL is a nil `lisp.List`.** `parse` and `parse1` return the parse tree, or nil for failure, so the Go reads like the Lisp: `if x := p.parse1(rule); x != nil { ... }`.
+- **The tree has the 1981 shape.** `PARSE` returned `(RULENAME X)` and sequences were joined with `@` (append), which splices each child's name and subtree into its parent's list. The Go builds exactly the same nested lists, so `TPrint` can follow `TPRINT` line for line.
+- **`MSG` goes to `Parser.Diag`**, an `io.Writer` that is nil (silent) by default.
+
+## The 1981 quirks, and `-fix`
+
+`Parser.Fixed` (the `-fix` flag) corrects the two parser bugs. It is off by default.
+
+| Quirk | 1981 behaviour (default) | With `-fix` |
+|---|---|---|
+| Alternation steps by two (`CDDR`) | `CHOICE` is `SIMPLE-EXPRESSION ! NAME RANGE-CONSTRAINT ! RANGE ! (^ OTHERS)`. The unparenthesized `NAME RANGE-CONSTRAINT` throws the stepping off, so the loop lands on `!` and never tries `RANGE` or `OTHERS`. | The body is split on `!`, and an alternative of several elements is parsed as a sequence. |
+| Punctuation is "first character below `A`" | `\|` (ASCII 124), `^`, `{` and `}` are looked up as rule names and fail with "Can't find production for \|". | Anything that does not start with a letter is punctuation. |
+| Duplicate rules | `BODY`, `PROGRAM-COMPONENT` and `CHOICE` are each defined twice. The later one wins. | Same, but `adaparse -fix` lists them. (The copies are identical, so nothing changes.) |
+
+The grammar's own typos (`TASK-DECLARACTION`, `IDENTIFIR`, `ARRAY-TYPE-INDICATION`, `UNVERSIAL-EXPRESSION-PACK`, and `CHARACTER-STRING`, which is never defined) are data, not parser bugs, so `-fix` leaves them alone. Each one fails its alternative and prints a "Can't find production" message.
+
+One change applies in both modes: a repetition `(/{ ... })` whose body matches without consuming any input stops instead of looping forever. No rule in GRAMMA.LSP triggers it.
+
+## Tests
+
+```
+go test ./...
+```
+
+[`parser_test.go`](parser_test.go) reads `original/DSKLOG.LOG`, the transcript of the session on January 19, 1981, finds the three parses in it (two subprogram bodies and `A + B * C`), runs each one through the Go parser, and checks that the printed tree matches the 1981 output character for character. The only adjustment is expanding the tabs the TOPS-10 terminal driver inserted. All three match in both modes. Other tests pin down the alternation and `|` quirks and the backtracking.
+
+One small puzzle: run against GRAMMA.LSP, the first two parses print "Can't find production for TASK-DECLARACTION" (and one prints the same for `CHARACTER-STRING`), but the 1981 log shows no such lines. Every grammar snapshot on the tape has those typos, so the likeliest answer is that the January 19 build of `PARSER.MLI` (the surviving copy is dated January 22) did not yet print that message. That is a guess.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
