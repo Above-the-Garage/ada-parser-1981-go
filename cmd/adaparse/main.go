@@ -2,7 +2,7 @@
 //
 // Parse Ada source files, scanned by a real Ada lexer:
 //
-//	adaparse hello.adb               # as a COMPILATION
+//	adaparse hello.ada               # as a COMPILATION
 //	adaparse -rule STATEMENT -e 'Total := Total + I * I;'
 //
 // Parse a 1981-style token list, written in UCI Lisp syntax and matched

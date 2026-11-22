@@ -12,8 +12,8 @@ import (
 // TestAda83Examples parses every example program with the corrected
 // grammar, including the ones the 1981 grammar cannot handle.
 func TestAda83Examples(t *testing.T) {
-	files, _ := filepath.Glob("examples/*.ad[abs]")
-	more, _ := filepath.Glob("examples/ada83/*.ad[abs]")
+	files, _ := filepath.Glob("examples/*.ada")
+	more, _ := filepath.Glob("examples/ada83/*.ada")
 	files = append(files, more...)
 	if len(files) < 7 {
 		t.Fatalf("found only %d example files", len(files))

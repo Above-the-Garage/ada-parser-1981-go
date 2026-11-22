@@ -11,7 +11,7 @@ The port keeps the 1981 design. The grammar is not translated into Go: the progr
 ```
 go install github.com/Above-the-Garage/ada-parser-1981-go/cmd/adaparse@latest
 
-adaparse examples/sum_squares.adb
+adaparse examples/sum_squares.ada
 ```
 
 ```
@@ -63,10 +63,10 @@ The comments in `parser.go` quote the MLISP line each piece of Go comes from.
 
 GRAMMA.LSP stubs out the lexical rules. `IDENTIFIER` is `(^ A) ! (^ B) ! (^ C)`, `NUMERIC-LITERAL` is `1 ! 2`, `CHARACTER-LITERAL` is `C-LIT`, and `CHARACTER-STRING` is never defined. When the input comes from the scanner, these four rules match any one token of the right kind instead, and the tree keeps the identifier as it was spelled in the source. Everything else is still the 1981 grammar, interpreted by the 1981 parser.
 
-That is enough for small programs like [`examples/sum_squares.adb`](examples/sum_squares.adb) and [`examples/gcd.adb`](examples/gcd.adb), which parse completely. Larger ones run into gaps in the grammar itself:
+That is enough for small programs like [`examples/sum_squares.ada`](examples/sum_squares.ada) and [`examples/gcd.ada`](examples/gcd.ada), which parse completely. Larger ones run into gaps in the grammar itself:
 
 - **A doubled `;` in declarative parts.** `DECLARATIVE-PART` is `(/{ UNIVERSAL-DECLARATION ; })`, but most declaration rules already end in `;`. Only object declarations (`X : T := V`) leave the `;` to `DECLARATIVE-PART`, so `Max : constant := 100;` or a nested procedure body needs a second `;`. [`examples/stack.ada`](examples/stack.ada) stops at line 9 for this reason.
-- **No string literals in expressions.** `PRIMARY` has no string alternative, so `Put_Line ("Hello, world")` fails at the string ([`examples/hello.adb`](examples/hello.adb)).
+- **No string literals in expressions.** `PRIMARY` has no string alternative, so `Put_Line ("Hello, world")` fails at the string ([`examples/hello.ada`](examples/hello.ada)).
 - **Procedure calls lack their `;`.** `PROCEDURE-CALL` is `(NAME)`, so `Put_Line (X);` leaves the `;` for a following statement that never matches it.
 - **Constrained arrays.** `array (1 .. Max) of Integer` needs `( ... )` around its constraint, but `CONSTRAINT` uses `UNIVERSAL-EXPRESSION-PACK` without the parentheses.
 

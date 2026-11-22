@@ -45,7 +45,7 @@ func parseFile(t *testing.T, name string, fixed bool) (*Parser, []lex.Token, boo
 
 // TestRealAda parses real Ada source scanned by the lexer.
 func TestRealAda(t *testing.T) {
-	for _, name := range []string{"examples/sum_squares.adb", "examples/gcd.adb"} {
+	for _, name := range []string{"examples/sum_squares.ada", "examples/gcd.ada"} {
 		for _, fixed := range []bool{false, true} {
 			if _, _, ok := parseFile(t, name, fixed); !ok {
 				t.Errorf("%s (fixed=%v) did not parse completely", name, fixed)
