@@ -11,36 +11,42 @@ The port keeps the 1981 design. The grammar is not translated into Go: the progr
 ```
 go install github.com/Above-the-Garage/ada-parser-1981-go/cmd/adaparse@latest
 
-adaparse -rule SIMPLE-EXPRESSION A + B '*' C
+adaparse examples/sum_squares.adb
 ```
 
 ```
- SIMPLE-EXPRESSION
-   TERM
-     FACTOR
-       PRIMARY
-         NAME
-           IDENTIFIER
-             A
-   ADDING-OPERATOR
-     +
-   TERM
-     ...
+ COMPILATION
+   COMPILATION-UNIT
+     CONTEXT-SPECIFICATION
+     SUBPROGRAM-BODY
+       SUBPROGRAM-SPECIFICATION
+         PROCEDURE
+         IDENTIFIER
+           Sum_Squares
+       IS
+       DECLARATIVE-PART
+       ...
 ```
 
-Run `adaparse` with no `-rule` for the command loop from `TOP()`: `S tokens...` sets the input, a rule name parses it, and `E` exits. Tokens use UCI Lisp syntax, so a comma is `/,` and a parenthesis is `/(`, just as in the 1981 session. The grammar's lexical rules are stubs, so the only identifiers are `A`, `B` and `C`, and the only numbers are `1` and `2`.
+There are three ways to feed it:
 
-Flags: `-fix` turns on the corrections described below, `-grammar FILE` loads a different grammar (any of the GRAMMA.* snapshots, for instance), and `-q` hides the "Can't find production" messages.
+- **Ada source files:** `adaparse FILE...`, or `adaparse -e 'source text'`. A real Ada 83 scanner ([`lex/`](lex/lex.go)) turns the source into tokens. The parse starts at `COMPILATION` unless you give `-rule`, for example `-rule STATEMENT -e 'X := Y + 1;'`. If the parse fails or stops early, it reports the line and column of the furthest token any attempt reached, which is usually where the trouble is.
+- **A 1981-style token list:** `adaparse -tokens -rule SIMPLE-EXPRESSION A + B '*' C`. The tokens use UCI Lisp syntax, so a comma is `/,` and a parenthesis is `/(`. With no scanner, the grammar's stub lexical rules apply: the only identifiers are `A`, `B` and `C`, and the only numbers are `1` and `2`.
+- **The 1981 command loop:** run `adaparse` with no arguments for `TOP()`. `S tokens...` sets the input, a rule name parses it, and `E` exits.
+
+Other flags: `-fix` turns on the corrections described below, `-grammar FILE` loads a different grammar (any of the GRAMMA.* snapshots, for instance), and `-q` hides the "Can't find production" messages. Each distinct message is printed only once.
 
 ## Layout
 
 | Path | What it is | 1981 counterpart |
 |---|---|---|
 | [`lisp/`](lisp/lisp.go) | Reader and printer for atoms, lists and the `/` escape | the UCI Lisp reader |
+| [`lex/`](lex/lex.go) | Ada 83 scanner | none: in 1981 the token list was typed by hand |
 | [`grammar.go`](grammar.go) | Loads `DEFPROP` forms into a map | `DSKIN GRAMMA` and `GET(name,'GRAMMAR)` |
 | [`parser.go`](parser.go) | `parse` and `parse1` | `EXPR PARSE` and `EXPR PARSE1` |
 | [`tprint.go`](tprint.go) | Tree printer | `EXPR TPRINT` |
 | [`cmd/adaparse`](cmd/adaparse/main.go) | Command line and command loop | `EXPR TOP` and `BUILD.MIC` |
+| [`examples/`](examples/) | Small Ada programs | |
 | [`original/`](original/) | `GRAMMA.LSP`, `PARSER.MLI`, `DSKLOG.LOG`, `BUILD.MIC`, byte-exact from tape | |
 
 The comments in `parser.go` quote the MLISP line each piece of Go comes from.
@@ -51,6 +57,19 @@ The comments in `parser.go` quote the MLISP line each piece of Go comes from.
 - **NIL is a nil `lisp.List`.** `parse` and `parse1` return the parse tree, or nil for failure, so the Go reads like the Lisp: `if x := p.parse1(rule); x != nil { ... }`.
 - **The tree has the 1981 shape.** `PARSE` returned `(RULENAME X)` and sequences were joined with `@` (append), which splices each child's name and subtree into its parent's list. The Go builds exactly the same nested lists, so `TPrint` can follow `TPRINT` line for line.
 - **`MSG` goes to `Parser.Diag`**, an `io.Writer` that is nil (silent) by default.
+
+## Real Ada source
+
+GRAMMA.LSP stubs out the lexical rules. `IDENTIFIER` is `(^ A) ! (^ B) ! (^ C)`, `NUMERIC-LITERAL` is `1 ! 2`, `CHARACTER-LITERAL` is `C-LIT`, and `CHARACTER-STRING` is never defined. When the input comes from the scanner, these four rules match any one token of the right kind instead, and the tree keeps the identifier as it was spelled in the source. Everything else is still the 1981 grammar, interpreted by the 1981 parser.
+
+That is enough for small programs like [`examples/sum_squares.adb`](examples/sum_squares.adb) and [`examples/gcd.adb`](examples/gcd.adb), which parse completely. Larger ones run into gaps in the grammar itself:
+
+- **A doubled `;` in declarative parts.** `DECLARATIVE-PART` is `(/{ UNIVERSAL-DECLARATION ; })`, but most declaration rules already end in `;`. Only object declarations (`X : T := V`) leave the `;` to `DECLARATIVE-PART`, so `Max : constant := 100;` or a nested procedure body needs a second `;`. [`examples/stack.ada`](examples/stack.ada) stops at line 9 for this reason.
+- **No string literals in expressions.** `PRIMARY` has no string alternative, so `Put_Line ("Hello, world")` fails at the string ([`examples/hello.adb`](examples/hello.adb)).
+- **Procedure calls lack their `;`.** `PROCEDURE-CALL` is `(NAME)`, so `Put_Line (X);` leaves the `;` for a following statement that never matches it.
+- **Constrained arrays.** `array (1 .. Max) of Integer` needs `( ... )` around its constraint, but `CONSTRAINT` uses `UNIVERSAL-EXPRESSION-PACK` without the parentheses.
+
+These are mistakes in the data, not in the parser, so `-fix` leaves them alone. A corrected grammar file could be loaded with `-grammar`.
 
 ## The 1981 quirks, and `-fix`
 
@@ -72,7 +91,7 @@ One change applies in both modes: a repetition `(/{ ... })` whose body matches w
 go test ./...
 ```
 
-[`parser_test.go`](parser_test.go) reads `original/DSKLOG.LOG`, the transcript of the session on January 19, 1981, finds the three parses in it (two subprogram bodies and `A + B * C`), runs each one through the Go parser, and checks that the printed tree matches the 1981 output character for character. The only adjustment is expanding the tabs the TOPS-10 terminal driver inserted. All three match in both modes. Other tests pin down the alternation and `|` quirks and the backtracking.
+[`parser_test.go`](parser_test.go) reads `original/DSKLOG.LOG`, the transcript of the session on January 19, 1981, finds the three parses in it (two subprogram bodies and `A + B * C`), runs each one through the Go parser, and checks that the printed tree matches the 1981 output character for character. The only adjustment is expanding the tabs the TOPS-10 terminal driver inserted. All three match in both modes. Other tests pin down the alternation and `|` quirks and the backtracking, check the scanner, parse the example programs, and check that `stack.ada` stops at line 9.
 
 One small puzzle: run against GRAMMA.LSP, the first two parses print "Can't find production for TASK-DECLARACTION" (and one prints the same for `CHARACTER-STRING`), but the 1981 log shows no such lines. Every grammar snapshot on the tape has those typos, so the likeliest answer is that the January 19 build of `PARSER.MLI` (the surviving copy is dated January 22) did not yet print that message. That is a guess.
 

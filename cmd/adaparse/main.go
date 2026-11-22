@@ -1,18 +1,25 @@
 // Command adaparse runs the 1981 Ada parser.
 //
-// With -rule, it parses the remaining arguments as one token list:
+// Parse Ada source files, scanned by a real Ada lexer:
 //
-//	adaparse -rule SIMPLE-EXPRESSION A + B '*' C
+//	adaparse hello.adb               # as a COMPILATION
+//	adaparse -rule STATEMENT -e 'Total := Total + I * I;'
 //
-// Without -rule, it starts the little command loop from EXPR TOP() in
+// Parse a 1981-style token list, written in UCI Lisp syntax and matched
+// against the grammar's stub lexical rules (identifiers A, B and C):
+//
+//	adaparse -tokens -rule SIMPLE-EXPRESSION A + B '*' C
+//
+// With no arguments, it starts the little command loop from EXPR TOP() in
 // PARSER.MLI, prompting with "-> ":
 //
 //	S tok tok ...   set the input (OLD _ CDR(X))
 //	RULE-NAME       reset the input and print its parse as RULE-NAME
 //	E               exit (in 1981, back to Lisp)
 //
-// Tokens are read with UCI Lisp syntax, so write a comma as "/," and a
-// parenthesis as "/(" just as the 1981 session did. Input is upper-cased.
+// The command loop reads tokens with UCI Lisp syntax, so write a comma as
+// "/," and a parenthesis as "/(" just as the 1981 session did. Its input is
+// upper-cased.
 package main
 
 import (
@@ -24,6 +31,7 @@ import (
 	"strings"
 
 	adaparser "github.com/Above-the-Garage/ada-parser-1981-go"
+	"github.com/Above-the-Garage/ada-parser-1981-go/lex"
 	"github.com/Above-the-Garage/ada-parser-1981-go/lisp"
 )
 
@@ -31,40 +39,137 @@ import (
 // (SETQ OLD @(PROCEDURE A IS B : C ; BEGIN NULL ; END ; ))
 var defaultInput = []string{"PROCEDURE", "A", "IS", "B", ":", "C", ";", "BEGIN", "NULL", ";", "END", ";"}
 
+func usage() {
+	fmt.Fprintf(os.Stderr, `usage:
+  adaparse [flags] FILE...          parse Ada source files
+  adaparse [flags] -e SOURCE        parse Ada source given as an argument
+  adaparse [flags] -tokens TOKEN... parse a 1981-style Lisp token list
+  adaparse [flags]                  the 1981 command loop
+
+flags:
+`)
+	flag.PrintDefaults()
+}
+
 func main() {
 	grammarPath := flag.String("grammar", "", "grammar file of DEFPROP forms (default: the embedded 1981 GRAMMA.LSP)")
 	fixed := flag.Bool("fix", false, "correct the 1981 alternation and punctuation quirks")
-	rule := flag.String("rule", "", "parse the arguments as this rule and exit")
+	rule := flag.String("rule", "", "rule to parse as (default COMPILATION for source, required with -tokens)")
+	source := flag.String("e", "", "parse this Ada source text")
+	tokens := flag.Bool("tokens", false, "the arguments are a Lisp token list, not file names")
 	quiet := flag.Bool("q", false, "hide \"Can't find production\" messages")
+	flag.Usage = usage
 	flag.Parse()
 
 	g, err := loadGrammar(*grammarPath)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "adaparse:", err)
-		os.Exit(1)
+		fatal(err)
 	}
 	p := adaparser.New(g)
 	p.Fixed = *fixed
 	if !*quiet {
-		p.Diag = os.Stderr
+		p.Diag = &onceWriter{w: os.Stderr, seen: map[string]bool{}}
 	}
 	if *fixed && len(g.Duplicates) > 0 {
 		fmt.Fprintf(os.Stderr, "adaparse: rules defined more than once (the last one wins): %s\n",
 			strings.Join(g.Duplicates, ", "))
 	}
 
-	if *rule != "" {
-		tokens, err := readTokens(strings.Join(flag.Args(), " "))
+	switch {
+	case *tokens:
+		if *rule == "" {
+			fatal(fmt.Errorf("-tokens needs -rule"))
+		}
+		toks, err := readTokens(strings.Join(flag.Args(), " "))
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "adaparse:", err)
+			fatal(err)
+		}
+		if !parseAndPrint(p, strings.ToUpper(*rule), toks) {
 			os.Exit(1)
 		}
-		if !parseAndPrint(p, strings.ToUpper(*rule), tokens) {
+	case *source != "":
+		if !parseSource(p, ruleOr(*rule), "-e", *source) {
 			os.Exit(1)
 		}
-		return
+	case flag.NArg() > 0:
+		ok := true
+		for _, name := range flag.Args() {
+			src, err := os.ReadFile(name)
+			if err != nil {
+				fatal(err)
+			}
+			if flag.NArg() > 1 {
+				fmt.Printf("==> %s <==\n", name)
+			}
+			ok = parseSource(p, ruleOr(*rule), name, string(src)) && ok
+		}
+		if !ok {
+			os.Exit(1)
+		}
+	default:
+		top(p, os.Stdin, os.Stdout)
 	}
-	top(p, os.Stdin, os.Stdout)
+}
+
+func fatal(err error) {
+	fmt.Fprintln(os.Stderr, "adaparse:", err)
+	os.Exit(1)
+}
+
+func ruleOr(rule string) string {
+	if rule == "" {
+		return "COMPILATION"
+	}
+	return strings.ToUpper(rule)
+}
+
+// onceWriter passes each distinct line through once, so a parse that
+// backtracks into the same missing production a thousand times says so
+// only once.
+type onceWriter struct {
+	w    io.Writer
+	seen map[string]bool
+}
+
+func (o *onceWriter) Write(b []byte) (int, error) {
+	if s := string(b); !o.seen[s] {
+		o.seen[s] = true
+		if _, err := o.w.Write(b); err != nil {
+			return 0, err
+		}
+	}
+	return len(b), nil
+}
+
+// parseSource scans and parses Ada source, prints the tree, and reports
+// where the parse stopped if it did not reach the end.
+func parseSource(p *adaparser.Parser, rule, name, src string) bool {
+	toks, err := lex.Scan(src)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s:%v\n", name, err)
+		return false
+	}
+	tree := p.ParseTokens(rule, toks)
+	if tree != nil {
+		adaparser.TPrintText(os.Stdout, tree)
+	}
+	rest := len(p.Remaining())
+	if tree != nil && rest == 0 {
+		return true
+	}
+	// Point at the token just past the deepest progress any attempt made.
+	if i := p.Furthest(); i < len(toks) {
+		t := toks[i]
+		what := "did not parse"
+		if tree != nil {
+			what = fmt.Sprintf("parsed %d of %d tokens", len(toks)-rest, len(toks))
+		}
+		fmt.Fprintf(os.Stderr, "%s:%d:%d: %s as %s; got stuck at %s %q\n",
+			name, t.Line, t.Col, what, rule, t.Kind, t.Text)
+	} else {
+		fmt.Fprintf(os.Stderr, "%s: did not parse as %s; ran out of input\n", name, rule)
+	}
+	return false
 }
 
 func loadGrammar(path string) (*adaparser.Grammar, error) {

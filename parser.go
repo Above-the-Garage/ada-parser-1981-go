@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/Above-the-Garage/ada-parser-1981-go/lex"
 	"github.com/Above-the-Garage/ada-parser-1981-go/lisp"
 )
 
@@ -49,6 +50,23 @@ type Parser struct {
 	// as SAVED-INPUT-STREAM _ INPUT-STREAM was in 1981.
 	input []lisp.Atom
 	pos   int
+
+	// toks is set by ParseTokens: the scanned source behind input, used
+	// to match the lexical rules by kind and to report positions.
+	toks []lex.Token
+
+	// furthest is the most tokens any attempt managed to consume.
+	furthest int
+}
+
+// lexicalRules are the grammar rules that GRAMMA.LSP only stubs out
+// (IDENTIFIER is A ! B ! C). When the input comes from the scanner, each
+// one matches any single token of its kind instead.
+var lexicalRules = map[lisp.Atom]lex.Kind{
+	"IDENTIFIER":        lex.Identifier,
+	"NUMERIC-LITERAL":   lex.Number,
+	"CHARACTER-LITERAL": lex.Character,
+	"CHARACTER-STRING":  lex.String,
 }
 
 // New returns a parser for g that behaves as the 1981 original did.
@@ -67,7 +85,45 @@ func (p *Parser) Parse(rule string, tokens []string) lisp.List {
 		p.input[i] = lisp.Atom(t)
 	}
 	p.pos = 0
+	p.furthest = 0
+	p.toks = nil
 	return p.parse(lisp.Atom(rule))
+}
+
+// ParseTokens parses scanned Ada source as the named rule. The stubbed
+// lexical rules (IDENTIFIER, NUMERIC-LITERAL, CHARACTER-LITERAL and
+// CHARACTER-STRING) match real tokens of the right kind; everything else
+// works exactly as in Parse.
+func (p *Parser) ParseTokens(rule string, toks []lex.Token) lisp.List {
+	p.input = make([]lisp.Atom, len(toks))
+	for i, t := range toks {
+		p.input[i] = lisp.Atom(t.Text)
+	}
+	p.pos, p.furthest, p.toks = 0, 0, toks
+	return p.parse(lisp.Atom(rule))
+}
+
+// Furthest returns how many tokens the deepest attempt of the last parse
+// consumed before it backtracked. When a parse fails or stops early,
+// the token at that index is usually where the trouble is.
+func (p *Parser) Furthest() int { return p.furthest }
+
+// isLexical reports whether the next token is a scanned identifier or
+// literal, which only the lexical rules may match.
+func (p *Parser) isLexical() bool {
+	if p.toks == nil || p.pos >= len(p.toks) {
+		return false
+	}
+	k := p.toks[p.pos].Kind
+	return k != lex.Delimiter && k != lex.Reserved
+}
+
+// consume is POP(INPUT-STREAM).
+func (p *Parser) consume() {
+	p.pos++
+	if p.pos > p.furthest {
+		p.furthest = p.pos
+	}
 }
 
 // Remaining returns the tokens the last Parse did not consume.
@@ -114,10 +170,20 @@ func (p *Parser) parse(ruleName lisp.Atom) lisp.List {
 		return nil
 	}
 
+	// Not in 1981: with scanned input, a lexical rule matches by token kind.
+	if kind, ok := lexicalRules[ruleName]; ok && p.toks != nil {
+		if p.toks[p.pos].Kind == kind {
+			tok := p.input[p.pos]
+			p.consume()
+			return lisp.List{ruleName, lisp.List{tok}}
+		}
+		return nil
+	}
+
 	// IF CAR(AEXPLODEC(RULENAME)) LT 65 THEN (IF RULENAME EQ INPUT-STREAM[1] ...)
 	if p.isPunct(ruleName) {
 		if ruleName == p.peek() {
-			p.pos++ // POP(INPUT-STREAM)
+			p.consume() // POP(INPUT-STREAM)
 			return lisp.List{ruleName}
 		}
 		return nil
@@ -215,8 +281,10 @@ func (p *Parser) parse1(rule lisp.Value) lisp.List {
 	switch r := rule.(type) {
 	case lisp.Atom:
 		// Either another rule or punctuation.
-		if r == p.peek() { // IF RULE EQ INPUT-STREAM[1]: exact match
-			p.pos++
+		// IF RULE EQ INPUT-STREAM[1]: exact match. (With scanned input,
+		// an identifier spelled like a rule name must not count.)
+		if r == p.peek() && !p.isLexical() {
+			p.consume()
 			return lisp.List{r}
 		}
 		if p.isPunct(r) {
@@ -232,7 +300,7 @@ func (p *Parser) parse1(rule lisp.Value) lisp.List {
 		case lisp.IsAtom(r[0], atomReserved): // IS IT A RESERVED WORD?
 			// IF RULE[2] EQ INPUT-STREAM[1] THEN POP(INPUT-STREAM) ALSO RETURN <RULE[2]>
 			if tok := p.peek(); tok != "" && len(r) > 1 && lisp.IsAtom(r[1], string(tok)) {
-				p.pos++
+				p.consume()
 				return lisp.List{r[1]}
 			}
 			return nil
