@@ -34,6 +34,19 @@ There are three ways to feed it:
 - **A 1981-style token list:** `adaparse -tokens -rule SIMPLE-EXPRESSION A + B '*' C`. The tokens use UCI Lisp syntax, so a comma is `/,` and a parenthesis is `/(`. With no scanner, the grammar's stub lexical rules apply: the only identifiers are `A`, `B` and `C`, and the only numbers are `1` and `2`.
 - **The 1981 command loop:** run `adaparse` with no arguments for `TOP()`. `S tokens...` sets the input, a rule name parses it, and `E` exits.
 
+Add `-source` to interleave the program with the tree. Each source line is printed, flush left with its line number, just before the outermost node that starts on it:
+
+```
+   3|    N     : Integer := 10;
+         DECLARATIVE-PART
+           DECLARATIVE-ITEM
+             BASIC-DECLARATION
+               OBJECT-DECLARATION
+                 ...
+   4|    Total : Integer := 0;
+           DECLARATIVE-ITEM
+```
+
 Other flags: `-ada83` uses the corrected grammar (see below), `-fix` turns on the corrections described below, `-grammar FILE` loads a different grammar (any of the GRAMMA.* snapshots, for instance), and `-q` hides the "Can't find production" messages. Each distinct message is printed only once.
 
 ## Layout

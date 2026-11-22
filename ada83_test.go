@@ -1,8 +1,12 @@
 package adaparser
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/Above-the-Garage/ada-parser-1981-go/lex"
@@ -101,4 +105,48 @@ func undefinedRules(g *Grammar) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// TestTPrintSource checks that interleaving the source changes nothing but
+// the added lines, and that every source line with tokens appears once.
+func TestTPrintSource(t *testing.T) {
+	name := "examples/ada83/shapes.ada"
+	src, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	toks, _ := lex.Scan(string(src))
+	p := New(Ada83Grammar())
+	p.Fixed = true
+	tree := p.ParseTokens("COMPILATION", toks)
+	if countTokens(tree) != len(toks) {
+		t.Fatalf("tree holds %d tokens, source has %d", countTokens(tree), len(toks))
+	}
+
+	var plain, mixed strings.Builder
+	TPrintText(&plain, tree)
+	TPrintSource(&mixed, tree, toks, string(src))
+
+	var treeOnly []string
+	var shown []int
+	for _, line := range strings.Split(strings.TrimSuffix(mixed.String(), "\n"), "\n") {
+		var n int
+		if _, err := fmt.Sscanf(line, "%d|", &n); err == nil && strings.Contains(line, "| ") {
+			shown = append(shown, n)
+			continue
+		}
+		treeOnly = append(treeOnly, line)
+	}
+	if got := strings.Join(treeOnly, "\n") + "\n"; got != plain.String() {
+		t.Error("tree lines differ from TPrintText")
+	}
+	var want []int
+	for _, tk := range toks {
+		if len(want) == 0 || want[len(want)-1] != tk.Line {
+			want = append(want, tk.Line)
+		}
+	}
+	if !slices.Equal(shown, want) {
+		t.Errorf("source lines shown %v, want %v", shown, want)
+	}
 }

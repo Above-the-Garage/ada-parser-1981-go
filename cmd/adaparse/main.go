@@ -58,9 +58,11 @@ func main() {
 	source := flag.String("e", "", "parse this Ada source text")
 	tokens := flag.Bool("tokens", false, "the arguments are a Lisp token list, not file names")
 	ada83 := flag.Bool("ada83", false, "use the corrected 2026 grammar (implies -fix)")
+	withSource := flag.Bool("source", false, "interleave the source lines with the tree")
 	quiet := flag.Bool("q", false, "hide \"Can't find production\" messages")
 	flag.Usage = usage
 	flag.Parse()
+	showSource = *withSource
 
 	var g *adaparser.Grammar
 	var err error
@@ -118,6 +120,9 @@ func main() {
 	}
 }
 
+// showSource is the -source flag.
+var showSource bool
+
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, "adaparse:", err)
 	os.Exit(1)
@@ -159,7 +164,11 @@ func parseSource(p *adaparser.Parser, rule, name, src string) bool {
 	tree := p.ParseTokens(rule, toks)
 	rest := len(p.Remaining())
 	if tree != nil && rest < len(toks) {
-		adaparser.TPrintText(os.Stdout, tree)
+		if showSource {
+			adaparser.TPrintSource(os.Stdout, tree, toks, src)
+		} else {
+			adaparser.TPrintText(os.Stdout, tree)
+		}
 	}
 	if tree != nil && rest == 0 {
 		return true
