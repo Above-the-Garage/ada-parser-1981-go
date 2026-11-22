@@ -1,5 +1,7 @@
 # The 1981 Ada Parser, in Go
 
+_This entire project was done with Claude Opus 5.5 Medium Effort guided by Stephen Clarke-Willson_
+
 This is a Go transliteration of a small Ada parser that I wrote in MLISP on the UC Irvine PDP-10 in January 1981. The original, recovered from backup tape in 2026, is at **[DrStephenCW/ada-parser-1981](https://github.com/DrStephenCW/ada-parser-1981)**, along with the story of how it was written and what came of it.
 
 The port keeps the 1981 design. The grammar is not translated into Go: the program reads the same `GRAMMA.LSP` file of `(DEFPROP rule body GRAMMAR)` forms with a tiny Lisp reader and walks it at run time, and the parser functions follow `PARSER.MLI` one for one. By default it also keeps the 1981 bugs.
