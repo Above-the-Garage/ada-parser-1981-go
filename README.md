@@ -6,6 +6,13 @@ The port keeps the 1981 design. The grammar is not translated into Go: the progr
 
 — Stephen Clarke-Willson
 
+Two companion documents tell the rest of the story:
+
+- [From a Weekend Parser to ADARPE](docs/adarpe-story-1981.md): what the 1981 parser led to, the UCI Ada Rapid Prototyping Environment, pieced together from the tapes.
+- [From MLISP to a Go Demonstration](docs/go-port.md): how Stephen and Claude ported it to Go in 2026 and took it to real Ada.
+
+On Windows, the `BuildAndRun*.cmd` scripts build `adaparse` and run it on an example.
+
 ## Try it
 
 ```

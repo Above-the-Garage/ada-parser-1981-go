@@ -1,2 +1,2 @@
 go build ./cmd/adaparse
-.\adaparse.exe -rule SIMPLE-EXPRESSION A + B '*' C
+.\adaparse.exe -tokens -rule SIMPLE-EXPRESSION A + B * C
