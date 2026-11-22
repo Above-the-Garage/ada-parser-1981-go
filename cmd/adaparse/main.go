@@ -57,12 +57,19 @@ func main() {
 	rule := flag.String("rule", "", "rule to parse as (default COMPILATION for source, required with -tokens)")
 	source := flag.String("e", "", "parse this Ada source text")
 	tokens := flag.Bool("tokens", false, "the arguments are a Lisp token list, not file names")
+	ada83 := flag.Bool("ada83", false, "use the corrected 2026 grammar (implies -fix)")
 	quiet := flag.Bool("q", false, "hide \"Can't find production\" messages")
 	flag.Usage = usage
 	flag.Parse()
 
-	g, err := loadGrammar(*grammarPath)
-	if err != nil {
+	var g *adaparser.Grammar
+	var err error
+	if *ada83 {
+		if *grammarPath != "" {
+			fatal(fmt.Errorf("use -ada83 or -grammar, not both"))
+		}
+		g, *fixed = adaparser.Ada83Grammar(), true
+	} else if g, err = loadGrammar(*grammarPath); err != nil {
 		fatal(err)
 	}
 	p := adaparser.New(g)
@@ -150,24 +157,25 @@ func parseSource(p *adaparser.Parser, rule, name, src string) bool {
 		return false
 	}
 	tree := p.ParseTokens(rule, toks)
-	if tree != nil {
+	rest := len(p.Remaining())
+	if tree != nil && rest < len(toks) {
 		adaparser.TPrintText(os.Stdout, tree)
 	}
-	rest := len(p.Remaining())
 	if tree != nil && rest == 0 {
 		return true
+	}
+	parsed := 0
+	if tree != nil {
+		parsed = len(toks) - rest
 	}
 	// Point at the token just past the deepest progress any attempt made.
 	if i := p.Furthest(); i < len(toks) {
 		t := toks[i]
-		what := "did not parse"
-		if tree != nil {
-			what = fmt.Sprintf("parsed %d of %d tokens", len(toks)-rest, len(toks))
-		}
-		fmt.Fprintf(os.Stderr, "%s:%d:%d: %s as %s; got stuck at %s %q\n",
-			name, t.Line, t.Col, what, rule, t.Kind, t.Text)
+		fmt.Fprintf(os.Stderr, "%s:%d:%d: syntax error at %s %q (parsed %d of %d tokens as %s)\n",
+			name, t.Line, t.Col, t.Kind, t.Text, parsed, len(toks), rule)
 	} else {
-		fmt.Fprintf(os.Stderr, "%s: did not parse as %s; ran out of input\n", name, rule)
+		fmt.Fprintf(os.Stderr, "%s: unexpected end of input (parsed %d of %d tokens as %s)\n",
+			name, parsed, len(toks), rule)
 	}
 	return false
 }

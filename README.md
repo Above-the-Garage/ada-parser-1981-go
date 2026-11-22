@@ -34,7 +34,7 @@ There are three ways to feed it:
 - **A 1981-style token list:** `adaparse -tokens -rule SIMPLE-EXPRESSION A + B '*' C`. The tokens use UCI Lisp syntax, so a comma is `/,` and a parenthesis is `/(`. With no scanner, the grammar's stub lexical rules apply: the only identifiers are `A`, `B` and `C`, and the only numbers are `1` and `2`.
 - **The 1981 command loop:** run `adaparse` with no arguments for `TOP()`. `S tokens...` sets the input, a rule name parses it, and `E` exits.
 
-Other flags: `-fix` turns on the corrections described below, `-grammar FILE` loads a different grammar (any of the GRAMMA.* snapshots, for instance), and `-q` hides the "Can't find production" messages. Each distinct message is printed only once.
+Other flags: `-ada83` uses the corrected grammar (see below), `-fix` turns on the corrections described below, `-grammar FILE` loads a different grammar (any of the GRAMMA.* snapshots, for instance), and `-q` hides the "Can't find production" messages. Each distinct message is printed only once.
 
 ## Layout
 
@@ -46,7 +46,8 @@ Other flags: `-fix` turns on the corrections described below, `-grammar FILE` lo
 | [`parser.go`](parser.go) | `parse` and `parse1` | `EXPR PARSE` and `EXPR PARSE1` |
 | [`tprint.go`](tprint.go) | Tree printer | `EXPR TPRINT` |
 | [`cmd/adaparse`](cmd/adaparse/main.go) | Command line and command loop | `EXPR TOP` and `BUILD.MIC` |
-| [`examples/`](examples/) | Small Ada programs | |
+| [`grammar/ada83.lsp`](grammar/ada83.lsp) | Corrected 2026 grammar, used with `-ada83` | GRAMMA.LSP |
+| [`examples/`](examples/) | Small Ada programs, and larger ones in `examples/ada83/` | |
 | [`original/`](original/) | `GRAMMA.LSP`, `PARSER.MLI`, `DSKLOG.LOG`, `BUILD.MIC`, byte-exact from tape | |
 
 The comments in `parser.go` quote the MLISP line each piece of Go comes from.
@@ -69,7 +70,26 @@ That is enough for small programs like [`examples/sum_squares.adb`](examples/sum
 - **Procedure calls lack their `;`.** `PROCEDURE-CALL` is `(NAME)`, so `Put_Line (X);` leaves the `;` for a following statement that never matches it.
 - **Constrained arrays.** `array (1 .. Max) of Integer` needs `( ... )` around its constraint, but `CONSTRAINT` uses `UNIVERSAL-EXPRESSION-PACK` without the parentheses.
 
-These are mistakes in the data, not in the parser, so `-fix` leaves them alone. A corrected grammar file could be loaded with `-grammar`.
+These are mistakes in the data, not in the parser, so `-fix` leaves them alone. GRAMMA.LSP also refers to seven rules that are never defined: `TASK-DECLARACTION`, `IDENTIFIR`, `ARRAY-TYPE-INDICATION`, `UNVERSIAL-EXPRESSION-PACK`, `ACTUAL-PARAMETER-PART`, `TASK-NAME` and a bare `OTHERS`.
+
+## The corrected grammar (`-ada83`)
+
+[`grammar/ada83.lsp`](grammar/ada83.lsp) is a new grammar, written in 2026 in the same `DEFPROP` notation and read by the same parser. GRAMMA.LSP stays untouched as the 1981 record. Select it with `-ada83`, which also turns on `-fix`:
+
+```
+adaparse -ada83 examples/ada83/queues.ada
+```
+
+It keeps the 1981 rule names where they still fit, and it covers most of Ada 83:
+
+- context clauses, subprograms, packages, generics and their instantiations, tasks, subunits and body stubs
+- object, number, exception, type, subtype and renaming declarations
+- enumeration, integer, real, array (constrained and unconstrained), record (with variants), access, derived and private types
+- every statement, including labels, named loops, blocks, `select`, `accept` and exception handlers
+- full expressions: short-circuit forms, membership tests, string literals, aggregates, attributes, qualified expressions and allocators
+- representation clauses and pragmas
+
+Every rule it refers to is defined, and a test checks that. The grammar is still a PEG, so the order of alternatives matters: longer forms come first. Where Ada is genuinely ambiguous without semantics, the grammar picks one reading. For example, `A (I)` is always a `NAME` with a call-or-index tail, and an index constraint such as `String (1 .. 10)` parses the same way. The examples in [`examples/ada83/`](examples/ada83/) (a generic queue, variant records with aggregates and allocators, and a task with `select`) all parse completely, as do the four programs in `examples/`. On a syntax error, `adaparse` gives the line and column of the token it got stuck on.
 
 ## The 1981 quirks, and `-fix`
 
@@ -91,7 +111,7 @@ One change applies in both modes: a repetition `(/{ ... })` whose body matches w
 go test ./...
 ```
 
-[`parser_test.go`](parser_test.go) reads `original/DSKLOG.LOG`, the transcript of the session on January 19, 1981, finds the three parses in it (two subprogram bodies and `A + B * C`), runs each one through the Go parser, and checks that the printed tree matches the 1981 output character for character. The only adjustment is expanding the tabs the TOPS-10 terminal driver inserted. All three match in both modes. Other tests pin down the alternation and `|` quirks and the backtracking, check the scanner, parse the example programs, and check that `stack.ada` stops at line 9.
+[`parser_test.go`](parser_test.go) reads `original/DSKLOG.LOG`, the transcript of the session on January 19, 1981, finds the three parses in it (two subprogram bodies and `A + B * C`), runs each one through the Go parser, and checks that the printed tree matches the 1981 output character for character. The only adjustment is expanding the tabs the TOPS-10 terminal driver inserted. All three match in both modes. Other tests pin down the alternation and `|` quirks and the backtracking, check the scanner, parse the example programs, and check that `stack.ada` stops at line 9 with the 1981 grammar. With the corrected grammar they parse every example completely, check where some broken programs fail, and check that no rule is left undefined.
 
 One small puzzle: run against GRAMMA.LSP, the first two parses print "Can't find production for TASK-DECLARACTION" (and one prints the same for `CHARACTER-STRING`), but the 1981 log shows no such lines. Every grammar snapshot on the tape has those typos, so the likeliest answer is that the January 19 build of `PARSER.MLI` (the surviving copy is dated January 22) did not yet print that message. That is a guess.
 

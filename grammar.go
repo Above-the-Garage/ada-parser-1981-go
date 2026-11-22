@@ -21,6 +21,13 @@ import (
 //go:embed original/GRAMMA.LSP
 var Gramma1981 string
 
+// Ada83 is a corrected grammar written in 2026 in the same DEFPROP
+// notation, covering most of Ada 83. Unlike GRAMMA.LSP it assumes the
+// parser's Fixed mode (alternation split on "!", "|" as punctuation).
+//
+//go:embed grammar/ada83.lsp
+var Ada83 string
+
 // Grammar holds the productions, keyed by rule name. In UCI Lisp each one
 // lived on the property list of its rule name under the indicator GRAMMAR,
 // and PARSER.MLI fetched it with GET(RULENAME, 'GRAMMAR).
@@ -78,4 +85,14 @@ func DefaultGrammar() *Grammar {
 func (g *Grammar) Rule(name string) (lisp.Value, bool) {
 	v, ok := g.rules[lisp.Atom(name)]
 	return v, ok
+}
+
+// Ada83Grammar returns the corrected grammar from the embedded ada83.lsp.
+// Use it with Parser.Fixed set.
+func Ada83Grammar() *Grammar {
+	g, err := LoadGrammar(Ada83)
+	if err != nil {
+		panic("adaparser: embedded ada83.lsp does not load: " + err.Error())
+	}
+	return g
 }

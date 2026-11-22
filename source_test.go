@@ -8,6 +8,25 @@ import (
 	"github.com/Above-the-Garage/ada-parser-1981-go/lex"
 )
 
+// parseWith scans a file and parses it as a COMPILATION in Fixed mode.
+func parseWith(t *testing.T, g *Grammar, name string) *Parser {
+	t.Helper()
+	src, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	toks, err := lex.Scan(string(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := New(g)
+	p.Fixed = true
+	if p.ParseTokens("COMPILATION", toks) == nil {
+		t.Fatal("parse failed")
+	}
+	return p
+}
+
 func parseFile(t *testing.T, name string, fixed bool) (*Parser, []lex.Token, bool) {
 	t.Helper()
 	src, err := os.ReadFile(name)
