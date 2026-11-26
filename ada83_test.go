@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Above-the-Garage/ada-parser-1981-go/lex"
-	"github.com/Above-the-Garage/ada-parser-1981-go/lisp"
+	"github.com/DrStephenCW/ada-parser-1981-go/lex"
+	"github.com/DrStephenCW/ada-parser-1981-go/lisp"
 )
 
 // TestAda83Examples parses every example program with the corrected

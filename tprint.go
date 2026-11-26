@@ -5,8 +5,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/Above-the-Garage/ada-parser-1981-go/lex"
-	"github.com/Above-the-Garage/ada-parser-1981-go/lisp"
+	"github.com/DrStephenCW/ada-parser-1981-go/lex"
+	"github.com/DrStephenCW/ada-parser-1981-go/lisp"
 )
 
 // TPrint writes the parse tree x the way EXPR TPRINT(X,COL) did: one atom

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Above-the-Garage/ada-parser-1981-go/lex"
+	"github.com/DrStephenCW/ada-parser-1981-go/lex"
 )
 
 // parseWith scans a file and parses it as a COMPILATION in Fixed mode.
