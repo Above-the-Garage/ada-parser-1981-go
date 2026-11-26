@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Above-the-Garage/ada-parser-1981-go/lisp"
+	"github.com/DrStephenCW/ada-parser-1981-go/lisp"
 )
 
 // session is one parse recorded in DSKLOG.LOG: the input that (RESET)

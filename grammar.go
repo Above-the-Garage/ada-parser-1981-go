@@ -13,7 +13,7 @@ import (
 	_ "embed"
 	"fmt"
 
-	"github.com/Above-the-Garage/ada-parser-1981-go/lisp"
+	"github.com/DrStephenCW/ada-parser-1981-go/lisp"
 )
 
 // Gramma1981 is GRAMMA.LSP exactly as it was recovered from tape.

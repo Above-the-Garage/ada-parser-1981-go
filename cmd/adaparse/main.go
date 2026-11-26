@@ -30,9 +30,9 @@ import (
 	"os"
 	"strings"
 
-	adaparser "github.com/Above-the-Garage/ada-parser-1981-go"
-	"github.com/Above-the-Garage/ada-parser-1981-go/lex"
-	"github.com/Above-the-Garage/ada-parser-1981-go/lisp"
+	adaparser "github.com/DrStephenCW/ada-parser-1981-go"
+	"github.com/DrStephenCW/ada-parser-1981-go/lex"
+	"github.com/DrStephenCW/ada-parser-1981-go/lisp"
 )
 
 // defaultInput is the test program BUILD.MIC left in OLD:

@@ -18,7 +18,7 @@ On Windows, the `BuildAndRun*.cmd` scripts build `adaparse` and run it on an exa
 ## Try it
 
 ```
-go install github.com/Above-the-Garage/ada-parser-1981-go/cmd/adaparse@latest
+go install github.com/DrStephenCW/ada-parser-1981-go/cmd/adaparse@latest
 
 adaparse examples/sum_squares.ada
 ```

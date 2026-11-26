@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/Above-the-Garage/ada-parser-1981-go/lex"
-	"github.com/Above-the-Garage/ada-parser-1981-go/lisp"
+	"github.com/DrStephenCW/ada-parser-1981-go/lex"
+	"github.com/DrStephenCW/ada-parser-1981-go/lisp"
 )
 
 // PlaceHolder is the marker PARSE1 returns when an optional part (/[ ... /])
